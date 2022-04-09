@@ -171,6 +171,7 @@ int main()
 
     std::fill(u_prev, u_prev + size, 100.0);
     std::fill(v_prev, v_prev + size, 100.0);
+    std::fill(dens_prev, dens_prev + size, 100.0);
     float dt = 0.01;
     float visc = 0.1;
     float diff = 1;
