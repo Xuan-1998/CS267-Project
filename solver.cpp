@@ -9,8 +9,6 @@
         x = tmp;         \
     }
 
-using float_t = float;
-
 /*
 const int size = N;
 */
@@ -164,10 +162,10 @@ int main()
     int simulating = 100;
     const int N = 2;
     const int size = (N + 2) * (N + 2);
-    float static u[size]{}, v[size]{};
-    float static u_prev[size]{};// = {[0 ... 15] = 1000.0};
-    float static v_prev[size]{};// = {[0 ... 15] = 1000.0};
-    float static dens[size]{}, dens_prev[size]{};
+    float static u[size], v[size];
+    float static u_prev[size]; // = {[0 ... 15] = 1000.0};
+    float static v_prev[size]; // = {[0 ... 15] = 1000.0};
+    float static dens[size], dens_prev[size];
 
     std::fill(u_prev, u_prev + size, 100.0);
     std::fill(v_prev, v_prev + size, 100.0);
