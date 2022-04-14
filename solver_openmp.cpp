@@ -1,5 +1,7 @@
 #include <iostream>
 #include <algorithm>
+#include <chrono>
+#include <omp.h>
 
 #define IX(i, j) ((i) + (N + 2) * (j))
 #define SWAP(x0, x)      \
@@ -19,13 +21,14 @@ void add_source(int N, float *x, float *s, float dt)
 void set_bnd(int N, int b, float *x)
 {
     int i;
-    for (i = 1; i <= N; i++)
-    {
-        x[IX(0, i)] = b == 1 ? -x[IX(1, i)] : x[IX(1, i)];
-        x[IX(N + 1, i)] = b == 1 ? -x[IX(N, i)] : x[IX(N, i)];
-        x[IX(i, 0)] = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
-        x[IX(i, N + 1)] = b == 2 ? -x[IX(i, N)] : x[IX(i, N)];
-    }
+    #pragma omp parallel for
+        for (i = 1; i <= N; i++)
+        {
+            x[IX(0, i)] = b == 1 ? -x[IX(1, i)] : x[IX(1, i)];
+            x[IX(N + 1, i)] = b == 1 ? -x[IX(N, i)] : x[IX(N, i)];
+            x[IX(i, 0)] = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+            x[IX(i, N + 1)] = b == 2 ? -x[IX(i, N)] : x[IX(i, N)];
+        }
     x[IX(0, 0)] = 0.5 * (x[IX(1, 0)] + x[IX(0, 1)]);
     x[IX(0, N + 1)] = 0.5 * (x[IX(1, N + 1)] + x[IX(0, N)]);
     x[IX(N + 1, 0)] = 0.5 * (x[IX(N, 0)] + x[IX(N + 1, 1)]);
@@ -37,25 +40,31 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     int i, j, k;
     float h;
     h = 1.0 / N;
-    for (i = 1; i <= N; i++)
+    #pragma omp parallel 
     {
-        for (j = 1; j <= N; j++)
+    #pragma omp for collapse(2)
+        for (i = 1; i <= N; i++)
         {
-            div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
-            p[IX(i, j)] = 0;
+            for (j = 1; j <= N; j++)
+            {
+                div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
+                p[IX(i, j)] = 0;
+            }
         }
     }
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
+    
     for (k = 0; k < 20; k++)
     {
+
         for (i = 1; i <= N; i++)
         {
             for (j = 1; j <= N; j++)
             {
                 p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
-                                   p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
-                                  4;
+                                p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
+                                4;
             }
         }
         SWAP(p, p_new);
@@ -78,20 +87,18 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
     int i, j, k;
     float a = dt * diff * N * N;
     // std::cout << "a:" << a << ", dt:" << dt << ", diff:" << diff << std::endl;
-    for (k = 0; k < 20; k++)
-    {
-        for (i = 1; i <= N; i++)
+#pragma omp parallel
         {
-            for (j = 1; j <= N; j++)
+#pragma omp for collapse(2)
+            for (i = 1; i <= N; i++)
             {
-                // x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] +
-                //                                    x[IX(i, j - 1)] + x[IX(i, j + 1)])) /
-                //               (1 + 4 * a);
-                x[IX(i, j)] = x0[IX(i, j)] + a * (x0[IX(i + 1, j)] + x0[IX(i - 1, j)] + x0[IX(i, j + 1)] + x0[IX(i, j - 1)] - 4 * x0[IX(i, j)]);
+                for (j = 1; j <= N; j++)
+                {
+                    x[IX(i, j)] = x0[IX(i, j)] + a * (x0[IX(i + 1, j)] + x0[IX(i - 1, j)] + x0[IX(i, j + 1)] + x0[IX(i, j - 1)] - 4 * x0[IX(i, j)]);
+                }
             }
         }
-        set_bnd(N, b, x);
-    }
+    set_bnd(N, b, x);
 }
 
 void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
@@ -157,6 +164,7 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 
 int main()
 {
+    auto start_time = std::chrono::steady_clock::now();
     int simulating = 100;
     const int N = 100;
     const int size = (N + 2) * (N + 2);
@@ -179,6 +187,10 @@ int main()
         dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
         cout << u[5] << endl;
-        // draw_dens(N, dens);
+        //  draw_dens(N, dens);
     }
+    auto end_time = std::chrono::steady_clock::now();
+    std::chrono::duration<double> difference = end_time - start_time;
+    double seconds = difference.count();
+    std::cout << "Simulation Time = " << seconds << " seconds for " << N << " blocks.\n";
 }
