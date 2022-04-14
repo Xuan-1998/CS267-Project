@@ -4,7 +4,13 @@
 #include <omp.h>
 #include <cassert>
 
-#define IX(i, j) ((i) + (N + 2) * (j))
+// #define IX(i, j) ((i) + (N + 2) * (j))
+int IX(int i, int j) {
+    int result = i + (100 + 2) * j;
+    assert(0 <= result);
+    assert(result < 102 * 102);
+    return i + (100 + 2) * j;
+}
 #define SWAP(x0, x)      \
     {                    \
         float *tmp = x0; \
@@ -112,13 +118,14 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
 
 void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
 {
-    int i, j, i0, j0, i1, j1;
-    float x, y, s0, t0, s1, t1, dt0;
-    dt0 = dt * N;
-    for (i = 1; i <= N; i++)
+    float dt0 = dt * N;
+    #pragma omp parallel for collapse(2)
+    for (int i = 1; i <= N; i++)
     {
-        for (j = 1; j <= N; j++)
+        for (int j = 1; j <= N; j++)
         {
+            int i0, j0, i1, j1;
+            float x, y, s0, t0, s1, t1;
             x = i - dt0 * u[IX(i, j)];
             y = j - dt0 * v[IX(i, j)];
             if (x < 0.5)
