@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <chrono>
 #include <omp.h>
+#include <cassert>
 
 #define IX(i, j) ((i) + (N + 2) * (j))
 #define SWAP(x0, x)      \
@@ -14,8 +15,9 @@
 void add_source(int N, float *x, float *s, float dt)
 {
     int i, size = (N + 2) * (N + 2);
-    for (i = 0; i < size; i++)
-        x[i] += dt * s[i];
+    #pragma omp parallel for
+        for (i = 0; i < size; i++)
+            x[i] += dt * s[i];
 }
 
 void set_bnd(int N, int b, float *x)
@@ -57,25 +59,32 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     
     for (k = 0; k < 20; k++)
     {
-
-        for (i = 1; i <= N; i++)
+        #pragma omp parallel 
         {
-            for (j = 1; j <= N; j++)
+        #pragma omp for collapse(2)
+            for (i = 1; i <= N; i++)
             {
-                p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
-                                p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
-                                4;
+                for (j = 1; j <= N; j++)
+                {
+                    p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
+                                    p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
+                                    4;
+                }
             }
         }
         SWAP(p, p_new);
         set_bnd(N, 0, p);
     }
-    for (i = 1; i <= N; i++)
+    #pragma omp parallel 
     {
-        for (j = 1; j <= N; j++)
+    #pragma omp for collapse(2)
+        for (i = 1; i <= N; i++)
         {
-            u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
-            v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
+            for (j = 1; j <= N; j++)
+            {
+                u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
+                v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
+            }
         }
     }
     set_bnd(N, 1, u);
