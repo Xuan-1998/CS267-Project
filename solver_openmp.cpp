@@ -9,11 +9,6 @@
         x = tmp;         \
     }
 
-/*
-const int size = N;
-*/
-void project(int N, float *u, float *v, float *p, float *div);
-
 void add_source(int N, float *x, float *s, float dt)
 {
     int i, size = (N + 2) * (N + 2);
@@ -37,19 +32,62 @@ void set_bnd(int N, int b, float *x)
     x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
 }
 
-void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
+void project(int N, float *u, float *v, float *p, float *div, float *p_new)
 {
     int i, j, k;
-    float a = dt * diff * N * N;
+    float h;
+    h = 1.0 / N;
+    for (i = 1; i <= N; i++)
+    {
+        for (j = 1; j <= N; j++)
+        {
+            div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
+            p[IX(i, j)] = 0;
+        }
+    }
+    set_bnd(N, 0, div);
+    set_bnd(N, 0, p);
     for (k = 0; k < 20; k++)
     {
         for (i = 1; i <= N; i++)
         {
             for (j = 1; j <= N; j++)
             {
-                x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] +
-                                                   x[IX(i, j - 1)] + x[IX(i, j + 1)])) /
-                              (1 + 4 * a);
+                p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
+                                   p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
+                                  4;
+            }
+        }
+        SWAP(p, p_new);
+        set_bnd(N, 0, p);
+    }
+    for (i = 1; i <= N; i++)
+    {
+        for (j = 1; j <= N; j++)
+        {
+            u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
+            v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
+        }
+    }
+    set_bnd(N, 1, u);
+    set_bnd(N, 2, v);
+}
+
+void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
+{
+    int i, j, k;
+    float a = dt * diff * N * N;
+    // std::cout << "a:" << a << ", dt:" << dt << ", diff:" << diff << std::endl;
+    for (k = 0; k < 20; k++)
+    {
+        for (i = 1; i <= N; i++)
+        {
+            for (j = 1; j <= N; j++)
+            {
+                // x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] +
+                //                                    x[IX(i, j - 1)] + x[IX(i, j + 1)])) /
+                //               (1 + 4 * a);
+                x[IX(i, j)] = x0[IX(i, j)] + a * (x0[IX(i + 1, j)] + x0[IX(i - 1, j)] + x0[IX(i, j + 1)] + x0[IX(i, j - 1)] - 4 * x0[IX(i, j)]);
             }
         }
         set_bnd(N, b, x);
@@ -101,7 +139,7 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
 }
 
 void vel_step(int N, float *u, float *v, float *u0, float *v0,
-              float visc, float dt)
+              float visc, float dt, float *p_new)
 {
     add_source(N, u, u0, dt);
     add_source(N, v, v0, dt);
@@ -109,74 +147,35 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
     diffuse(N, 1, u, u0, visc, dt);
     SWAP(v0, v);
     diffuse(N, 2, v, v0, visc, dt);
-    project(N, u, v, u0, v0);
+    project(N, u, v, u0, v0, p_new);
     SWAP(u0, u);
     SWAP(v0, v);
     advect(N, 1, u, u0, u0, v0, dt);
     advect(N, 2, v, v0, u0, v0, dt);
-    project(N, u, v, u0, v0);
-}
-
-void project(int N, float *u, float *v, float *p, float *div)
-{
-    int i, j, k;
-    float h;
-    h = 1.0 / N;
-    for (i = 1; i <= N; i++)
-    {
-        for (j = 1; j <= N; j++)
-        {
-            div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
-            p[IX(i, j)] = 0;
-        }
-    }
-    set_bnd(N, 0, div);
-    set_bnd(N, 0, p);
-    for (k = 0; k < 20; k++)
-    {
-        for (i = 1; i <= N; i++)
-        {
-            for (j = 1; j <= N; j++)
-            {
-                p[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
-                               p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
-                              4;
-            }
-        }
-        set_bnd(N, 0, p);
-    }
-    for (i = 1; i <= N; i++)
-    {
-        for (j = 1; j <= N; j++)
-        {
-            u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
-            v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
-        }
-    }
-    set_bnd(N, 1, u);
-    set_bnd(N, 2, v);
+    project(N, u, v, u0, v0, p_new);
 }
 
 int main()
 {
     int simulating = 100;
-    const int N = 2;
+    const int N = 100;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
     float static v_prev[size]; // = {[0 ... 15] = 1000.0};
     float static dens[size], dens_prev[size];
+    float static p_new[size];
 
     std::fill(u_prev, u_prev + size, 100.0);
     std::fill(v_prev, v_prev + size, 100.0);
     std::fill(dens_prev, dens_prev + size, 100.0);
     float dt = 0.01;
-    float visc = 0.1;
-    float diff = 1;
+    float visc = 0.00001;
+    float diff = 0.00001;
     while (simulating--)
     {
         // get_from_UI(dens_prev, u_prev, v_prev);
-        vel_step(N, u, v, u_prev, v_prev, visc, dt);
+        vel_step(N, u, v, u_prev, v_prev, visc, dt, p_new);
         dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
         cout << u[5] << endl;
