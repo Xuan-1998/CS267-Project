@@ -176,7 +176,7 @@ int main()
         vel_step(N, u, v, u_prev, v_prev, visc, dt, p_new);
         dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
-        cout << u[5] << endl;
+        //cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
     auto end_time = std::chrono::steady_clock::now();

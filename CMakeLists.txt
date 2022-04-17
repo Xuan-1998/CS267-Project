@@ -15,7 +15,7 @@ if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
             "module swap ${Prg-${CMAKE_C_COMPILER_ID}} PrgEnv-gnu")
 endif ()
 
-add_executable(serial solver.cpp)
-add_executable(openmp solver_openmp.cpp)
-target_link_libraries(openmp PRIVATE OpenMP::OpenMP_CXX)
+add_executable(solver solver.cpp)
+add_executable(solver_openmp solver_openmp.cpp)
+target_link_libraries(solver_openmp PRIVATE OpenMP::OpenMP_CXX)
 

@@ -2,15 +2,9 @@
 #include <algorithm>
 #include <chrono>
 #include <omp.h>
-#include <cassert>
 
-// #define IX(i, j) ((i) + (N + 2) * (j))
-int IX(int i, int j) {
-    int result = i + (100 + 2) * j;
-    assert(0 <= result);
-    assert(result < 102 * 102);
-    return i + (100 + 2) * j;
-}
+#define IX(i, j) ((i) + (N + 2) * (j))
+
 #define SWAP(x0, x)      \
     {                    \
         float *tmp = x0; \
@@ -202,7 +196,7 @@ int main()
         vel_step(N, u, v, u_prev, v_prev, visc, dt, p_new);
         dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
-        cout << u[5] << endl;
+        // cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
     auto end_time = std::chrono::steady_clock::now();
