@@ -1,29 +1,33 @@
+#include <cuda.h> 
+
 #include <iostream>
 #include <algorithm>
 
+using floating_t = double;
 #define IX(i, j) ((i) + (N + 2) * (j))
 #define SWAP(x0, x)      \
     {                    \
-        float *tmp = x0; \
+        floating_t *tmp = x0; \
         x0 = x;          \
         x = tmp;         \
     }
 
-using float_t = float;
+
+__device__ floating_t testvar = 5;
 
 /*
 const int size = N;
 */
-void project(int N, float *u, float *v, float *p, float *div);
+void project(int N, floating_t *u, floating_t *v, floating_t *p, floating_t *div);
 
-void add_source(int N, float *x, float *s, float dt)
+void add_source(int N, floating_t *x, floating_t *s, floating_t dt)
 {
     int i, size = (N + 2) * (N + 2);
     for (i = 0; i < size; i++)
         x[i] += dt * s[i];
 }
 
-void set_bnd(int N, int b, float *x)
+void set_bnd(int N, int b, floating_t *x)
 {
     int i;
     for (i = 1; i <= N; i++)
@@ -39,10 +43,10 @@ void set_bnd(int N, int b, float *x)
     x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
 }
 
-void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
+void diffuse(int N, int b, floating_t *x, floating_t *x0, floating_t diff, floating_t dt)
 {
     int i, j, k;
-    float a = dt * diff * N * N;
+    floating_t a = dt * diff * N * N;
     for (k = 0; k < 20; k++)
     {
         for (i = 1; i <= N; i++)
@@ -58,10 +62,10 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
     }
 }
 
-void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
+void advect(int N, int b, floating_t *d, floating_t *d0, floating_t *u, floating_t *v, floating_t dt)
 {
     int i, j, i0, j0, i1, j1;
-    float x, y, s0, t0, s1, t1, dt0;
+    floating_t x, y, s0, t0, s1, t1, dt0;
     dt0 = dt * N;
     for (i = 1; i <= N; i++)
     {
@@ -92,8 +96,8 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
     set_bnd(N, b, d);
 }
 
-void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
-               float dt)
+void dens_step(int N, floating_t *x, floating_t *x0, floating_t *u, floating_t *v, floating_t diff,
+               floating_t dt)
 {
     add_source(N, x, x0, dt);
     SWAP(x0, x);
@@ -102,8 +106,8 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
     advect(N, 0, x, x0, u, v, dt);
 }
 
-void vel_step(int N, float *u, float *v, float *u0, float *v0,
-              float visc, float dt)
+void vel_step(int N, floating_t *u, floating_t *v, floating_t *u0, floating_t *v0,
+              floating_t visc, floating_t dt)
 {
     add_source(N, u, u0, dt);
     add_source(N, v, v0, dt);
@@ -119,10 +123,10 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
     project(N, u, v, u0, v0);
 }
 
-void project(int N, float *u, float *v, float *p, float *div)
+void project(int N, floating_t *u, floating_t *v, floating_t *p, floating_t *div)
 {
     int i, j, k;
-    float h;
+    floating_t h;
     h = 1.0 / N;
     for (i = 1; i <= N; i++)
     {
@@ -161,20 +165,20 @@ void project(int N, float *u, float *v, float *p, float *div)
 
 int main()
 {
-    int simulating = 100;
-    const int N = 2;
+    int simulating = 1000;
+    const int N = 1000;
     const int size = (N + 2) * (N + 2);
-    float static u[size]{}, v[size]{};
-    float static u_prev[size]{};// = {[0 ... 15] = 1000.0};
-    float static v_prev[size]{};// = {[0 ... 15] = 1000.0};
-    float static dens[size]{}, dens_prev[size]{};
+    floating_t static u[size]{}, v[size]{};
+    floating_t static u_prev[size]{}; // = {[0 ... 15] = 1000.0};
+    floating_t static v_prev[size]{}; // = {[0 ... 15] = 1000.0};
+    floating_t static dens[size]{}, dens_prev[size]{};
 
     std::fill(u_prev, u_prev + size, 100.0);
     std::fill(v_prev, v_prev + size, 100.0);
     std::fill(dens_prev, dens_prev + size, 100.0);
-    float dt = 0.01;
-    float visc = 0.1;
-    float diff = 1;
+    constexpr floating_t dt = 0.01;
+    constexpr floating_t visc = 0.1;
+    constexpr floating_t diff = 1;
     while (simulating--)
     {
         // get_from_UI(dens_prev, u_prev, v_prev);
