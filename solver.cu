@@ -146,6 +146,7 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
 void vel_step(int N, float *u, float *v, float *u0, float *v0,
               float visc, float dt, float *p_new)
 {
+    // We maybe just put steps here into GPU instead of putting them in the main
     add_source<<<N_blks_large, NUM_THREADS>>>(N, u, u0, dt);
     add_source<<<N_blks_large, NUM_THREADS>>>(N, v, v0, dt);
     SWAP(u0, u);
