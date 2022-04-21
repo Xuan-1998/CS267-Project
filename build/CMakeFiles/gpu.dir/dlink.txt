@@ -1,0 +1,1 @@
+/jet/packages/spack/opt/spack/linux-centos8-zen/gcc-8.3.1/cuda-11.1.1-a6ajxenobex5bvpejykhtnfut4arfpwh/bin/nvcc   -arch=sm_60 -O2 -DNDEBUG  -Xcompiler=-fPIC -Wno-deprecated-gpu-targets -shared -dlink CMakeFiles/gpu.dir/solver.cu.o -o CMakeFiles/gpu.dir/cmake_device_link.o 

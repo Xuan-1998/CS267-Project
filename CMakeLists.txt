@@ -13,6 +13,9 @@ if (NOT "${CMAKE_C_COMPILER_ID}" STREQUAL "GNU")
             "module swap ${Prg-${CMAKE_C_COMPILER_ID}} PrgEnv-gnu")
 endif ()
 
-add_executable(gpu solver.gpu)
+add_executable(gpu solver.cu)
 target_compile_features(gpu PRIVATE cxx_std_11)
 set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -arch=sm_60")
+
+# Copy the job scripts
+configure_file(job-gpu job-gpu COPYONLY)
