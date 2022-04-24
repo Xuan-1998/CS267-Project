@@ -96,9 +96,13 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     //         p[IX(i, j)] = 0;
     //     }
     // }
+    std::cout << "It comes here";
+    
 
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
+
+    std::cout << "It goes after bnd setting";
 
     for (k = 0; k < 20; k++)
     {
