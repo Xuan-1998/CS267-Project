@@ -37,8 +37,8 @@ void set_bnd(int N, int b, float *x)
 
 
 __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) {
-    int i = blockIdx.y * blockDim.y + threadIdx.y + 1;
-    int j = blockIdx.x * blockDim.x + threadIdx.x + 1;
+    int i = blockIdx.x * blockDim.x + threadIdx.y;
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
 
     float h;
     h = 1.0 / N;
@@ -70,10 +70,10 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     cudaMemcpy(d_p, p, mem_size, cudaMemcpyHostToDevice);
     cudaMalloc(&d_div, mem_size);
     cudaMemcpy(d_div, div, mem_size, cudaMemcpyHostToDevice);
-    dim3 gridDim((size / NUM_THREADS) + NUM_THREADS - 1 / 16, (size / NUM_THREADS) + NUM_THREADS - 1 / 16);
+    // dim3 gridDim(size / NUM_THREADS);
     dim3 blockDim(16, 16);
 
-    projectHelper1<<<gridDim, blockDim>>>(N, u, v, p, div);
+    projectHelper1<<<size / NUM_THREADS, blockDim>>>(N, u, v, p, div);
 
     cudaDeviceSynchronize();
     cudaMemcpy(u, d_u, mem_size, cudaMemcpyDeviceToHost);
@@ -208,8 +208,8 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 1000;
-    const int N = 1000;
+    int simulating = 100;
+    const int N = 100;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
