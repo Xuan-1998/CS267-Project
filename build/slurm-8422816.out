@@ -1,0 +1,9 @@
+It comes before projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
+It comes after projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
+It comes all the way down of copy
+It comes all the way down of free
+It goes after bnd settingIt comes before projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
+It comes after projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
+It comes all the way down of copy
+It comes all the way down of free
+It goes after bnd setting

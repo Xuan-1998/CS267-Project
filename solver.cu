@@ -223,8 +223,8 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 1;
-    const int N = 100;
+    int simulating = 5;
+    const int N = 5000;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
