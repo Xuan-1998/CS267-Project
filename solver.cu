@@ -39,7 +39,7 @@ void set_bnd(int N, int b, float *x)
 
 __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
-    const int i = tid % N + 1, j = tid / N + 1;
+    int i = tid % N + 1, j = tid / N + 1;
     
     // printf();
     float h;
@@ -48,8 +48,11 @@ __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) 
     if (i <= N && j <= N) {
         // printf("rows is: %d, cols is %d\n", i, j);
         div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
-            p[IX(i, j)] = 0;
+        p[IX(i, j)] = 0;
+    } else {
+        printf("%d\n", tid);
     }
+    __syncthreads();
 }
 void project(int N, float *u, float *v, float *p, float *div, float *p_new)
 {
@@ -65,28 +68,32 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     float *d_p = nullptr;
     float *d_div = nullptr;
 
-    cudaMalloc(&d_u, mem_size);
-    cudaMemcpy(d_u, u, mem_size, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_v, mem_size);
-    cudaMemcpy(d_v, v, mem_size, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_p, mem_size);
-    cudaMemcpy(d_p, p, mem_size, cudaMemcpyHostToDevice);
-    cudaMalloc(&d_div, mem_size);
-    cudaMemcpy(d_div, div, mem_size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_u, sizeof(u));
+    cudaMemcpy(d_u, u, sizeof(u), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_v, sizeof(v));
+    cudaMemcpy(d_v, v, sizeof(v), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_p, sizeof(p));
+    cudaMemcpy(d_p, p, sizeof(p), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_div, sizeof(div));
+    cudaMemcpy(d_div, div, sizeof(div), cudaMemcpyHostToDevice);
     // dim3 gridDim(N / 16, N / 16);
     // dim3 blockDim(16, 16);
-
+    std::cout << "It comes before projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);\n";
     projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
-
-    cudaDeviceSynchronize();
-    cudaMemcpy(u, d_u, mem_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(v, d_v, mem_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(p, d_p, mem_size, cudaMemcpyDeviceToHost);
-    cudaMemcpy(div, d_div, mem_size, cudaMemcpyDeviceToHost);
-    cudaFree(d_u);
-    cudaFree(d_v);
-    cudaFree(d_p);
-    cudaFree(d_div);
+    std::cout << "It comes after projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);\n";
+    // cudaDeviceSynchronize();
+    // std::cout << "It comes after cudaDeviceSynchronize";
+    cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
+    cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
+    cudaMemcpy(p, d_p, sizeof(d_p), cudaMemcpyDeviceToHost);
+    cudaMemcpy(div, d_div, sizeof(div), cudaMemcpyDeviceToHost);
+    std::cout << "It comes all the way down of copy\n";
+    // cudaFree(d_u);
+    // cudaFree(d_v);
+    // cudaFree(d_p);
+    // cudaFree(d_div);
+    // let's don't free
+    std::cout << "It comes all the way down of free\n";
 
     // for (i = 1; i <= N; i++)
     // {
@@ -96,11 +103,12 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     //         p[IX(i, j)] = 0;
     //     }
     // }
-    std::cout << "It comes here";
+    
     
 
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
+    // std::cout << "It comes all the way down of free";
 
     std::cout << "It goes after bnd setting";
 
@@ -215,7 +223,7 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 100;
+    int simulating = 1;
     const int N = 100;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];

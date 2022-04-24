@@ -1,0 +1,1 @@
+It comes before projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);It comes after projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);/var/spool/slurm/d/job8417088/slurm_script: line 8: 32236 Segmentation fault      (core dumped) ./gpu
