@@ -1,7 +1,9 @@
 #include <iostream>
 #include <algorithm>
 #include <chrono>
+#include <cuda.h>
 
+#define NUM_THREADS 256
 #define IX(i, j) ((i) + (N + 2) * (j))
 #define SWAP(x0, x)      \
     {                    \
@@ -10,19 +12,14 @@
         x = tmp;         \
     }
 
-#define NUM_THREADS 256
-static int N_blks_small, N_blks_large, N_blks_bnd;
-
-
 __global__ void add_source(int N, float *x, float *s, float dt)
 {
-    // int i, size = (N + 2) * (N + 2);
-    // for (i = 0; i < size; i++)
-    //     x[i] += dt * s[i];
-    int const tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid > (N) * (N))
-        return;
-    x[tid] += dt * s[tid];
+    // should not put N inside any more
+    int i = threadIdx.x + blockDim.x * blockIdx.x;
+    int size = (N + 2) * (N + 2);
+    if (i < size) {
+        x[i] += dt * s[i];
+    }        
 }
 
 void set_bnd(int N, int b, float *x)
@@ -136,8 +133,22 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
 void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
                float dt)
 {
-    int N_blks_large = N * N;
-    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, x, x0, dt);
+    float *d_x = nullptr;
+    float *d_x0 = nullptr;
+    const int size = (N + 2) * (N + 2);
+    int mem_size = size*sizeof(float);
+    cudaMalloc(&d_x, mem_size);
+    cudaMemcpy(d_x, x, mem_size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_x0, mem_size);
+    cudaMemcpy(d_x0, x0, mem_size, cudaMemcpyHostToDevice);
+
+    add_source<<<(size / NUM_THREADS) + NUM_THREADS - 1, NUM_THREADS>>>(N, d_x, d_x0, dt);
+    cudaDeviceSynchronize();
+    cudaMemcpy(x, d_x, mem_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(x0, d_x0, mem_size, cudaMemcpyDeviceToHost);
+    cudaFree(d_x);
+    cudaFree(d_x0);
+
     SWAP(x0, x);
     diffuse(N, 0, x, x0, diff, dt);
     SWAP(x0, x);
@@ -147,10 +158,36 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
 void vel_step(int N, float *u, float *v, float *u0, float *v0,
               float visc, float dt, float *p_new)
 {
-    int N_blks_large = N * N;
-    // We maybe just put steps here into GPU instead of putting them in the main
-    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, u, u0, dt);
-    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, v, v0, dt);
+    float *d_u = nullptr;
+    float *d_u0 = nullptr;
+    const int size = (N + 2) * (N + 2);
+    int mem_size = size*sizeof(float);
+    cudaMalloc(&d_u, mem_size);
+    cudaMemcpy(d_u, u, mem_size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_u0, mem_size);
+    cudaMemcpy(d_u0, u0, mem_size, cudaMemcpyHostToDevice);
+
+    add_source<<<(size / NUM_THREADS) + NUM_THREADS - 1, NUM_THREADS>>>(N, d_u, d_u0, dt);
+    cudaDeviceSynchronize();
+    cudaMemcpy(u, d_u, mem_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(u0, d_u0, mem_size, cudaMemcpyDeviceToHost);
+    cudaFree(d_u);
+    cudaFree(d_u0);
+
+    float *d_v = nullptr;
+    float *d_v0 = nullptr;
+
+    cudaMalloc(&d_v, mem_size);
+    cudaMemcpy(d_v, v, mem_size, cudaMemcpyHostToDevice);
+    cudaMalloc(&d_v0, mem_size);
+    cudaMemcpy(d_v0, v0, mem_size, cudaMemcpyHostToDevice);
+
+    add_source<<<(size / NUM_THREADS) + NUM_THREADS - 1, NUM_THREADS>>>(N, d_v, d_v0, dt);
+    cudaDeviceSynchronize();
+    cudaMemcpy(v, d_v, mem_size, cudaMemcpyDeviceToHost);
+    cudaMemcpy(v0, d_v0, mem_size, cudaMemcpyDeviceToHost);
+    cudaFree(d_v);
+    cudaFree(d_v0);
     SWAP(u0, u);
     diffuse(N, 1, u, u0, visc, dt);
     SWAP(v0, v);
@@ -181,62 +218,15 @@ int main()
     float dt = 0.01;
     float visc = 0.00001;
     float diff = 0.00001;
-
-    float* d_u;
-    float* d_v;
-    float* d_u_prev;
-    float* d_v_prev;
-    float* d_dens;
-    float* d_dens_prev;
-    float* d_p_new;
-
-    cudaMalloc((void **)&d_u, size * sizeof(float));
-    cudaMalloc((void **)&d_v, size * sizeof(float));
-    cudaMalloc((void **)&d_u_prev, size * sizeof(float));
-    cudaMalloc((void **)&d_v_prev, size * sizeof(float));
-    cudaMalloc((void **)&d_dens, size * sizeof(float));
-    cudaMalloc((void **)&d_dens_prev, size * sizeof(float));
-    cudaMalloc((void **)&d_p_new, size * sizeof(float));
-
-
-
-    cudaMemcpy(d_u, u, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_v, v, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_u_prev, u_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_v_prev, v_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_dens, dens, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_dens_prev, dens_prev, size * sizeof(float), cudaMemcpyHostToDevice);
-    cudaMemcpy(d_p_new, p_new, size * sizeof(float), cudaMemcpyHostToDevice);
-
     while (simulating--)
     {
         // get_from_UI(dens_prev, u_prev, v_prev);
-        vel_step(N, d_u, d_v, d_u_prev, d_v_prev, visc, dt, d_p_new);
-        dens_step(N, d_dens, d_dens_prev, d_u, d_v, diff, dt);
-        cudaDeviceSynchronize();
+        vel_step(N, u, v, u_prev, v_prev, visc, dt, p_new);
+        dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
         //cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
-
-    cudaMemcpy(u, d_u, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(v, d_v, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(u_prev, d_u_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(v_prev, d_v_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(dens, d_dens, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(dens_prev, d_dens_prev, size * sizeof(float), cudaMemcpyDeviceToHost);
-    cudaMemcpy(p_new, d_p_new, size * sizeof(float), cudaMemcpyDeviceToHost);
-
-    cudaDeviceSynchronize();
-
-    cudaFree(d_u);
-    cudaFree(d_v);
-    cudaFree(d_u_prev);
-    cudaFree(d_v_prev);
-    cudaFree(d_dens);
-    cudaFree(d_dens_prev);
-    cudaFree(d_p_new);
-
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::duration<double> difference = end_time - start_time;
     double seconds = difference.count();
