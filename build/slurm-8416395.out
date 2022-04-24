@@ -1,0 +1,1 @@
+/var/spool/slurm/d/job8416395/slurm_script: line 8: 78242 Segmentation fault      (core dumped) ./gpu

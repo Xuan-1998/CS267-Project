@@ -20,7 +20,7 @@ __global__ void add_source(int N, float *x, float *s, float dt)
     // for (i = 0; i < size; i++)
     //     x[i] += dt * s[i];
     int const tid = threadIdx.x + blockIdx.x * blockDim.x;
-    if (tid > (N + 2) * (N + 2))
+    if (tid > (N) * (N))
         return;
     x[tid] += dt * s[tid];
 }
@@ -136,7 +136,8 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
 void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
                float dt)
 {
-    add_source<<<N_blks_large, NUM_THREADS>>>(N, x, x0, dt);
+    int N_blks_large = N * N;
+    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, x, x0, dt);
     SWAP(x0, x);
     diffuse(N, 0, x, x0, diff, dt);
     SWAP(x0, x);
@@ -146,9 +147,10 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
 void vel_step(int N, float *u, float *v, float *u0, float *v0,
               float visc, float dt, float *p_new)
 {
+    int N_blks_large = N * N;
     // We maybe just put steps here into GPU instead of putting them in the main
-    add_source<<<N_blks_large, NUM_THREADS>>>(N, u, u0, dt);
-    add_source<<<N_blks_large, NUM_THREADS>>>(N, v, v0, dt);
+    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, u, u0, dt);
+    add_source<<<N_blks_large / NUM_THREADS, NUM_THREADS>>>(N, v, v0, dt);
     SWAP(u0, u);
     diffuse(N, 1, u, u0, visc, dt);
     SWAP(v0, v);
