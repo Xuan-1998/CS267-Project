@@ -49,10 +49,11 @@ __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) 
         // printf("rows is: %d, cols is %d\n", i, j);
         div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
         p[IX(i, j)] = 0;
-    } else {
-        printf("%d\n", tid);
     }
-    __syncthreads();
+    // } else {
+    //     printf("%d\n", tid);
+    // }
+    // __syncthreads();
 }
 
 __global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
@@ -64,7 +65,7 @@ __global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
                     p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
                     4;
     }
-    __syncthreads();
+    // __syncthreads();
 
 }
 
@@ -78,7 +79,7 @@ __global__ void projectHelper3(int N, float *u, float *v, float *p) {
         u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
         v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
     }
-    __syncthreads();
+    // __syncthreads();
 
 }
 
@@ -97,6 +98,7 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     float *d_div = nullptr;
 
     cudaMalloc(&d_u, sizeof(u));
+    // TODO: check the value before and after copy
     cudaMemcpy(d_u, u, sizeof(u), cudaMemcpyHostToDevice);
     cudaMalloc(&d_v, sizeof(v));
     cudaMemcpy(d_v, v, sizeof(v), cudaMemcpyHostToDevice);
@@ -113,8 +115,9 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     // std::cout << "It comes after cudaDeviceSynchronize";
     cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
     cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
-    cudaMemcpy(p, d_p, sizeof(d_p), cudaMemcpyDeviceToHost);
+    cudaMemcpy(p, d_p, sizeof(p), cudaMemcpyDeviceToHost);
     cudaMemcpy(div, d_div, sizeof(div), cudaMemcpyDeviceToHost);
+    // TODO: check did I copy a link or a pointer
     // std::cout << "It comes all the way down of copy\n";
     // cudaFree(d_u);
     // cudaFree(d_v);
@@ -291,7 +294,7 @@ int main()
 {
     auto start_time = std::chrono::steady_clock::now();
     int simulating = 5;
-    const int N = 5000;
+    const int N = 100;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
@@ -314,8 +317,14 @@ int main()
         //cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
+    // TODO: locate exact locations where dens went wrong
+    // TODO: put another variables to see whether it goes wrong
+    // TODO: what the things can be used for bridge2 to do profiling
+    for (int i = 0; i < size; i++) {
+        std::cout << dens[i] << std::endl;
+    }
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::duration<double> difference = end_time - start_time;
     double seconds = difference.count();
-    std::cout << "Simulation Time = " << seconds << " seconds for " << N << " blocks.\n";
+    std::cout << "Simulation Time = " << seconds << " seconds for " << N << " blocks" << NUM_THREADS << " threads.\n";
 }
