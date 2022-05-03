@@ -11,6 +11,7 @@
         x0 = x;          \
         x = tmp;         \
     }
+
 #define NUM_THREADS 256
 
 void add_source(int N, float *x, float *s, float dt)
@@ -20,9 +21,32 @@ void add_source(int N, float *x, float *s, float dt)
         x[i] += dt * s[i];
 }
 
+// __global__ void set_bnd_helper(int N, int b, float *x) {
+//     int i = threadIdx.x + blockIdx.x * blockDim.x + 1;
+//     if (i <= N) {
+//         x[IX(0, i)] = b == 1 ? -x[IX(1, i)] : x[IX(1, i)];
+//         x[IX(N + 1, i)] = b == 1 ? -x[IX(N, i)] : x[IX(N, i)];
+//         x[IX(i, 0)] = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+//         x[IX(i, N + 1)] = b == 2 ? -x[IX(i, N)] : x[IX(i, N)];
+//         __syncthreads();
+//     }
+// }
+
 void set_bnd(int N, int b, float *x)
 {
+    // int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i;
+
+    // set_bnd_helper<<<(N + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, b, x);
+    
+    // int i = threadIdx.x + blockIdx.x * blockDim.x + 1;
+    // if (i <= N) {
+    //     x[IX(0, i)] = b == 1 ? -x[IX(1, i)] : x[IX(1, i)];
+    //     x[IX(N + 1, i)] = b == 1 ? -x[IX(N, i)] : x[IX(N, i)];
+    //     x[IX(i, 0)] = b == 2 ? -x[IX(i, 1)] : x[IX(i, 1)];
+    //     x[IX(i, N + 1)] = b == 2 ? -x[IX(i, N)] : x[IX(i, N)];
+    //     __syncthreads();
+    // }
     for (i = 1; i <= N; i++)
     {
         x[IX(0, i)] = b == 1 ? -x[IX(1, i)] : x[IX(1, i)];
@@ -53,7 +77,7 @@ __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) 
     // } else {
     //     printf("%d\n", tid);
     // }
-    // __syncthreads();
+    __syncthreads();
 }
 
 __global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
@@ -65,7 +89,7 @@ __global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
                     p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
                     4;
     }
-    // __syncthreads();
+    __syncthreads();
 
 }
 
@@ -79,52 +103,28 @@ __global__ void projectHelper3(int N, float *u, float *v, float *p) {
         u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
         v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
     }
-    // __syncthreads();
+    __syncthreads();
 
 }
 
+
 void project(int N, float *u, float *v, float *p, float *div, float *p_new)
 {
-    // int i, j, k;
-    // float h;
-    // h = 1.0 / N;
+    // int tid = threadIdx.x + blockIdx.x * blockDim.x;
+    float h;
+    int k;
+    h = 1.0 / N;
 
+    // int i = tid % N + 1, j = tid / N + 1;
+    // if (i <= N && j <= N) {
+    //     // printf("rows is: %d, cols is %d\n", i, j);
+    //     div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
+    //     p[IX(i, j)] = 0;
+    // }
+    // __syncthreads();
     const int size = (N + 2) * (N + 2);
-    // int mem_size = size*sizeof(float);
-
-    float *d_u = nullptr;
-    float *d_v = nullptr;
-    float *d_p = nullptr;
-    float *d_div = nullptr;
-
-    cudaMalloc(&d_u, sizeof(u));
-    // TODO: check the value before and after copy
-    cudaMemcpy(d_u, u, sizeof(u), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_v, sizeof(v));
-    cudaMemcpy(d_v, v, sizeof(v), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_p, sizeof(p));
-    cudaMemcpy(d_p, p, sizeof(p), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_div, sizeof(div));
-    cudaMemcpy(d_div, div, sizeof(div), cudaMemcpyHostToDevice);
-    // dim3 gridDim(N / 16, N / 16);
-    // dim3 blockDim(16, 16);
-    // std::cout << "It comes before projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);\n";
-    projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, d_u, d_v, d_p, d_div);
-    // std::cout << "It comes after projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);\n";
-    // cudaDeviceSynchronize();
-    // std::cout << "It comes after cudaDeviceSynchronize";
-    cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
-    cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
-    cudaMemcpy(p, d_p, sizeof(p), cudaMemcpyDeviceToHost);
-    cudaMemcpy(div, d_div, sizeof(div), cudaMemcpyDeviceToHost);
-    // TODO: check did I copy a link or a pointer
-    // std::cout << "It comes all the way down of copy\n";
-    // cudaFree(d_u);
-    // cudaFree(d_v);
-    // cudaFree(d_p);
-    // cudaFree(d_div);
-
-    // std::cout << "It comes all the way down of free\n";
+    
+    projectHelper1<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p, div);
 
     // for (i = 1; i <= N; i++)
     // {
@@ -134,69 +134,30 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     //         p[IX(i, j)] = 0;
     //     }
     // }
-    
-    
-
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
-    // std::cout << "It comes all the way down of free";
+    for (k = 0; k < 20; k++)
+    {
 
-    // std::cout << "It goes after bnd setting";
+        // if (i <= N && j <= N) {
+        //     p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
+        //                 p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
+        //                 4;
+        // }
 
-    d_div = nullptr;
-    d_p = nullptr;
-    float *d_p_new = nullptr;
-    
-    cudaMalloc(&d_p_new, sizeof(p_new));
-    cudaMemcpy(d_p_new, p_new, sizeof(p_new), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_p, sizeof(p));
-    cudaMemcpy(d_p, p, sizeof(p), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_div, sizeof(div));
-    cudaMemcpy(d_div, div, sizeof(div), cudaMemcpyHostToDevice);    
+        // __syncthreads();
+        projectHelper2<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, div, p, p_new);
+        SWAP(p, p_new);
+        set_bnd(N, 0, p);
+    }
 
-    projectHelper2<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, d_div, d_p, d_p_new);
-
-    cudaMemcpy(p_new, d_p_new, sizeof(p_new), cudaMemcpyDeviceToHost);
-    cudaMemcpy(p, d_p, sizeof(d_p), cudaMemcpyDeviceToHost);
-    cudaMemcpy(div, d_div, sizeof(div), cudaMemcpyDeviceToHost);
-
-    // cudaFree(d_p_new);
-    // cudaFree(d_p);
-    // cudaFree(d_div);
-    
-    // for (i = 1; i <= N; i++)
-    // {
-    //     for (j = 1; j <= N; j++)
-    //     {
-    //         p_new[IX(i, j)] = (div[IX(i, j)] + p[IX(i - 1, j)] + p[IX(i + 1, j)] +
-    //                         p[IX(i, j - 1)] + p[IX(i, j + 1)]) /
-    //                         4;
-    //     }
+    // if (i <= N && j <= N) {
+    //     u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
+    //     v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
     // }
-    SWAP(p, p_new);
-    set_bnd(N, 0, p);
+    projectHelper3<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, u, v, p);
 
-    d_u = nullptr;
-    d_v = nullptr;
-    d_p = nullptr;
-    cudaMalloc(&d_u, sizeof(u));
-    cudaMemcpy(d_u, u, sizeof(u), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_v, sizeof(v));
-    cudaMemcpy(d_v, v, sizeof(v), cudaMemcpyHostToDevice);
-    cudaMalloc(&d_p, sizeof(p));
-    cudaMemcpy(d_p, p, sizeof(p), cudaMemcpyHostToDevice);
-
-    projectHelper3<<<(size + NUM_THREADS - 1) / NUM_THREADS, NUM_THREADS>>>(N, d_u, d_v, d_p);
-
-    cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
-    cudaMemcpy(p, d_p, sizeof(d_p), cudaMemcpyDeviceToHost);
-    cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
-
-    cudaFree(d_u);
-    cudaFree(d_p);
-    cudaFree(d_v);
-    cudaFree(d_div);
-    cudaFree(d_p_new);
+    // __syncthreads();
     // for (i = 1; i <= N; i++)
     // {
     //     for (j = 1; j <= N; j++)
@@ -211,7 +172,7 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
 
 void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
 {
-    int i, j;
+    int i, j, k;
     float a = dt * diff * N * N;
     // std::cout << "a:" << a << ", dt:" << dt << ", diff:" << diff << std::endl;
     for (i = 1; i <= N; i++)
@@ -267,7 +228,7 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
     SWAP(x0, x);
     advect(N, 0, x, x0, u, v, dt);
 }
-// num of threads = 256
+
 void vel_step(int N, float *u, float *v, float *u0, float *v0,
               float visc, float dt, float *p_new)
 {
@@ -277,23 +238,21 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
     diffuse(N, 1, u, u0, visc, dt);
     SWAP(v0, v);
     diffuse(N, 2, v, v0, visc, dt);
-    // dim3 gridDim(N/16, N/16)
-    // dim3 blockDim(16, 16)
-    // row = blockIdx.y * blockDim.y + threadIdx.y;
-    // col = blockIdx.x * blockDim.x + threadIdx.x;
-    // u[row][col]
+    const int size = (N + 2) * (N + 2);
     project(N, u, v, u0, v0, p_new);
+    // project(N, u, v, u0, v0, p_new);
     SWAP(u0, u);
     SWAP(v0, v);
     advect(N, 1, u, u0, u0, v0, dt);
     advect(N, 2, v, v0, u0, v0, dt);
     project(N, u, v, u0, v0, p_new);
+    // project(N, u, v, u0, v0, p_new);
 }
 
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 5;
+    int simulating = 100;
     const int N = 100;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
@@ -308,23 +267,60 @@ int main()
     float dt = 0.01;
     float visc = 0.00001;
     float diff = 0.00001;
+
+    float *d_u = nullptr;
+    float *d_v = nullptr;
+    float *d_u_prev = nullptr;
+    float *d_v_prev = nullptr;
+    float *d_dens = nullptr;
+    float *d_dens_prev = nullptr;
+    float *d_p_new = nullptr;
+
+
+    cudaMalloc(&d_u, sizeof(u));
+    cudaMemcpy(d_u, u, sizeof(u), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_v, sizeof(v));
+    cudaMemcpy(d_v, v, sizeof(v), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_u_prev, sizeof(u_prev));
+    cudaMemcpy(d_u_prev, u_prev, sizeof(u_prev), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_v_prev, sizeof(v_prev));
+    cudaMemcpy(d_v_prev, v_prev, sizeof(v_prev), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_dens, sizeof(dens));
+    cudaMemcpy(d_dens, dens, sizeof(dens), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_dens_prev, sizeof(dens_prev));
+    cudaMemcpy(d_dens_prev, dens_prev, sizeof(dens_prev), cudaMemcpyHostToDevice);
+    cudaMalloc(&d_p_new, sizeof(p_new));
+    cudaMemcpy(d_p_new, p_new, sizeof(p_new), cudaMemcpyHostToDevice);
+
+
+
     while (simulating--)
     {
         // get_from_UI(dens_prev, u_prev, v_prev);
-        vel_step(N, u, v, u_prev, v_prev, visc, dt, p_new);
-        dens_step(N, dens, dens_prev, u, v, diff, dt);
+        vel_step(N, d_u, d_v, d_u_prev, d_v_prev, visc, dt, d_p_new);
+        dens_step(N, d_dens, d_dens_prev, d_u, d_v, diff, dt);
         using namespace std;
+        cudaDeviceSynchronize();
         //cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
-    // TODO: locate exact locations where dens went wrong
-    // TODO: put another variables to see whether it goes wrong
-    // TODO: what the things can be used for bridge2 to do profiling
-    for (int i = 0; i < size; i++) {
-        std::cout << dens[i] << std::endl;
-    }
+    cudaDeviceSynchronize();
+
+    cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
+    cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
+    cudaMemcpy(u_prev, d_u_prev, sizeof(u_prev), cudaMemcpyDeviceToHost);
+    cudaMemcpy(v_prev, d_v_prev, sizeof(v_prev), cudaMemcpyDeviceToHost);
+    cudaMemcpy(dens, d_dens, sizeof(dens), cudaMemcpyDeviceToHost);
+    cudaMemcpy(dens_prev, d_dens_prev, sizeof(dens_prev), cudaMemcpyDeviceToHost);
+    cudaMemcpy(p_new, d_p_new, sizeof(p_new), cudaMemcpyDeviceToHost);
+
+
+
+
+
+
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::duration<double> difference = end_time - start_time;
     double seconds = difference.count();
-    std::cout << "Simulation Time = " << seconds << " seconds for " << N << " blocks" << NUM_THREADS << " threads.\n";
+    std::cout << "Simulation Time = " << seconds << " seconds for " << N << " blocks.\n";
 }
