@@ -31,6 +31,7 @@ __global__ void inline add_source(int N, float *x, float *s, float dt)
     }
     // for (i = 0; i < size; i++)
     //     x[i] += dt * s[i];
+    __syncthreads();
 }
 
 // __global__ void set_bnd_helper(int N, int b, float *x) {
@@ -80,6 +81,7 @@ __global__ void inline set_bnd(int N, int b, float *x)
     // x[IX(0, N + 1)] = 0.5 * (x[IX(1, N + 1)] + x[IX(0, N)]);
     // x[IX(N + 1, 0)] = 0.5 * (x[IX(N, 0)] + x[IX(N + 1, 1)]);
     // x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
+    __syncthreads();
 }
 
 __global__ void inline set_bnd_finish(int N, int b, float*x) 
@@ -88,6 +90,7 @@ __global__ void inline set_bnd_finish(int N, int b, float*x)
     x[IX(0, N + 1)] = 0.5 * (x[IX(1, N + 1)] + x[IX(0, N)]);
     x[IX(N + 1, 0)] = 0.5 * (x[IX(N, 0)] + x[IX(N + 1, 1)]);
     x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
+    __syncthreads();
 }
 
 
@@ -254,6 +257,7 @@ __global__ void inline diffuse(int N, int b, float *x, float *x0, float diff, fl
     //     }
     // }
     // set_bnd(N, b, x);
+    __syncthreads();
 }
 // remember: for all the diffuse, after that you need to set_bnd
 
@@ -315,6 +319,7 @@ __global__ void inline advect(int N, int b, float *d, float *d0, float *u, float
     //     }
     // }
     // set_bnd(N, b, d);
+    __syncthreads();
 }
 
 // remember: for all the advect, after that you need to set_bnd
@@ -366,7 +371,7 @@ void inline vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 1;
+    int simulating = 100;
     const int N = 400;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
