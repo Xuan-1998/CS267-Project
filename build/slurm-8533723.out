@@ -1,0 +1,7 @@
+==47994== NVPROF is profiling process 47994, command: ./gpu
+==47994== Profiling application: ./gpu
+==47994== Profiling result:
+No kernels were profiled.
+No API activities were profiled.
+==47994== Warning: Some profiling data are not recorded.
+======== Error: Application received signal 139

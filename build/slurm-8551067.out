@@ -1,0 +1,7 @@
+==59032== NVPROF is profiling process 59032, command: ./gpu
+==59032== Profiling application: ./gpu
+==59032== Profiling result:
+No kernels were profiled.
+No API activities were profiled.
+==59032== Warning: Some profiling data are not recorded.
+======== Error: Application received signal 139

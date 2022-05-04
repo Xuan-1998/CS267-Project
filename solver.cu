@@ -5,16 +5,18 @@
 #include <stdio.h>
 
 #define IX(i, j) ((i) + (N + 2) * (j))
-#define SWAP(x0, x)      \
-    {                    \
-        float *tmp = x0; \
-        x0 = x;          \
-        x = tmp;         \
-    }
+
 
 #define NUM_THREADS 256
 
-void add_source(int N, float *x, float *s, float dt)
+__device__ void SWAP(float *x0, float *x) 
+{
+        float *tmp = x0; \
+        x0 = x;          \
+        x = tmp;         \
+}
+
+__device__ void inline add_source(int N, float *x, float *s, float dt)
 {
     int i, size = (N + 2) * (N + 2);
     for (i = 0; i < size; i++)
@@ -32,7 +34,7 @@ void add_source(int N, float *x, float *s, float dt)
 //     }
 // }
 
-void set_bnd(int N, int b, float *x)
+__device__ void inline set_bnd(int N, int b, float *x)
 {
     // int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i;
@@ -61,7 +63,7 @@ void set_bnd(int N, int b, float *x)
 }
 
 
-__global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) {
+__global__ void inline projectHelper1(int N, float *u, float *v, float *p, float *div) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i = tid % N + 1, j = tid / N + 1;
     
@@ -80,7 +82,7 @@ __global__ void projectHelper1(int N, float *u, float *v, float *p, float *div) 
     __syncthreads();
 }
 
-__global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
+__global__ void inline projectHelper2(int N, float *div, float *p, float *p_new) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i = tid % N + 1, j = tid / N + 1;
 
@@ -93,7 +95,7 @@ __global__ void projectHelper2(int N, float *div, float *p, float *p_new) {
 
 }
 
-__global__ void projectHelper3(int N, float *u, float *v, float *p) {
+__global__ void inline projectHelper3(int N, float *u, float *v, float *p) {
     int tid = threadIdx.x + blockIdx.x * blockDim.x;
     int i = tid % N + 1, j = tid / N + 1;
     float h;
@@ -108,7 +110,7 @@ __global__ void projectHelper3(int N, float *u, float *v, float *p) {
 }
 
 
-void project(int N, float *u, float *v, float *p, float *div, float *p_new)
+void inline project(int N, float *u, float *v, float *p, float *div, float *p_new)
 {
     // int tid = threadIdx.x + blockIdx.x * blockDim.x;
     float h;
@@ -170,7 +172,7 @@ void project(int N, float *u, float *v, float *p, float *div, float *p_new)
     set_bnd(N, 2, v);
 }
 
-void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
+__device__ void inline diffuse(int N, int b, float *x, float *x0, float diff, float dt)
 {
     int i, j, k;
     float a = dt * diff * N * N;
@@ -185,7 +187,7 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
     set_bnd(N, b, x);
 }
 
-void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
+__device__ void inline advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
 {
     int i, j, i0, j0, i1, j1;
     float x, y, s0, t0, s1, t1, dt0;
@@ -219,7 +221,13 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
     set_bnd(N, b, d);
 }
 
-void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
+__global__ void inline des_step_gpu(int N, float *x, float *x0, float *u, float *v, float diff,
+               float dt)
+               {
+                   
+               }
+
+void inline dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
                float dt)
 {
     add_source(N, x, x0, dt);
@@ -229,7 +237,7 @@ void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
     advect(N, 0, x, x0, u, v, dt);
 }
 
-void vel_step(int N, float *u, float *v, float *u0, float *v0,
+void inline vel_step(int N, float *u, float *v, float *u0, float *v0,
               float visc, float dt, float *p_new)
 {
     add_source(N, u, u0, dt);
@@ -252,8 +260,8 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 100;
-    const int N = 100;
+    int simulating = 1;
+    const int N = 400;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
@@ -304,7 +312,7 @@ int main()
         //cout << u[5] << endl;
         //  draw_dens(N, dens);
     }
-    cudaDeviceSynchronize();
+    // cudaDeviceSynchronize();
 
     cudaMemcpy(u, d_u, sizeof(u), cudaMemcpyDeviceToHost);
     cudaMemcpy(v, d_v, sizeof(v), cudaMemcpyDeviceToHost);
