@@ -78,7 +78,7 @@ void add_source(int N, float *x, float *s, float dt)
 
 void set_bnd(int N, int b, float *x)
 {
-    // TODO: if not border, then return
+    // TODO: if not border, then return, i.e. parallelize
     int i;
     for (i = 1; i <= N; i++)
     {
@@ -104,6 +104,7 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
         {
             for (j = 1; j <= N; j++)
             {
+                // TODO: MAKE THIS JACOBI
                 x[IX(i, j)] = (x0[IX(i, j)] + a * (x[IX(i - 1, j)] + x[IX(i + 1, j)] +
                                                    x[IX(i, j - 1)] + x[IX(i, j + 1)])) /
                               (1 + 4 * a);
@@ -208,8 +209,8 @@ void project(int N, float *u, float *v, float *p, float *div)
 {
     // red-black
     int i, j, k;
-    float h;
-    h = 1.0 / N;
+    const float h = 1.0 / N;
+    /*
     for (i = 1; i <= N; i++)
     {
         for (j = 1; j <= N; j++)
@@ -218,8 +219,15 @@ void project(int N, float *u, float *v, float *p, float *div)
             p[IX(i, j)] = 0;
         }
     }
+    */
+    foreach (1, [=](int i, int j)
+             {
+                div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
+                p[IX(i, j)] = 0; })
+        ;
     set_bnd(N, 0, div);
     set_bnd(N, 0, p);
+    // TODO: Jacobi-ze this
     for (k = 0; k < 20; k++)
     {
         for (i = 1; i <= N; i++)
@@ -233,6 +241,7 @@ void project(int N, float *u, float *v, float *p, float *div)
         }
         set_bnd(N, 0, p);
     }
+    /*
     for (i = 1; i <= N; i++)
     {
         for (j = 1; j <= N; j++)
@@ -241,6 +250,12 @@ void project(int N, float *u, float *v, float *p, float *div)
             v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h;
         }
     }
+    */
+    foreach (1, [=](int i, int j)
+             {
+            u[IX(i, j)] -= 0.5 * (p[IX(i + 1, j)] - p[IX(i - 1, j)]) / h;
+            v[IX(i, j)] -= 0.5 * (p[IX(i, j + 1)] - p[IX(i, j - 1)]) / h; })
+        ;
     set_bnd(N, 1, u);
     set_bnd(N, 2, v);
 }
@@ -248,6 +263,7 @@ void project(int N, float *u, float *v, float *p, float *div)
 void communicateBorders()
 {
     // direct side then full top/bot
+
 }
 
 void factorize(const int n)
@@ -268,6 +284,10 @@ void factorize(const int n)
     const int periods[2]{false, false};
     MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, (int)true, &cart);
     MPI_Comm_rank(cart, &myRank);
+
+    MPI_Datatype col, row;
+    MPI_Type_vector(dims[0], 1, dims[1], MPI_FLOAT, &col);
+    MPI_Type_vector(dims[1], 1, dims[0], MPI_FLOAT, &row);
 }
 int left, right, top, bot;
 void assignBlocks(const int n)

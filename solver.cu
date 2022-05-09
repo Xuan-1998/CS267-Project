@@ -293,8 +293,8 @@ void vel_step(int N, float *u, float *v, float *u0, float *v0,
 int main()
 {
     auto start_time = std::chrono::steady_clock::now();
-    int simulating = 5;
-    const int N = 100;
+    int simulating = 100;
+    const int N = 1000;
     const int size = (N + 2) * (N + 2);
     float static u[size], v[size];
     float static u_prev[size]; // = {[0 ... 15] = 1000.0};
@@ -321,7 +321,7 @@ int main()
     // TODO: put another variables to see whether it goes wrong
     // TODO: what the things can be used for bridge2 to do profiling
     for (int i = 0; i < size; i++) {
-        std::cout << dens[i] << std::endl;
+        // std::cout << dens[i] << std::endl;
     }
     auto end_time = std::chrono::steady_clock::now();
     std::chrono::duration<double> difference = end_time - start_time;

@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/jet/home/xuan1998/CS267-Project/solver.cu
+/home/laurencelu/CS267-Project/solver.cu
 iostream
 -
 algorithm

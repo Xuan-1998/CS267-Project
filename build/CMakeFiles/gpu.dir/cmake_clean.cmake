@@ -1,8 +1,7 @@
 file(REMOVE_RECURSE
   "CMakeFiles/gpu.dir/solver.cu.o"
-  "CMakeFiles/gpu.dir/cmake_device_link.o"
-  "gpu.pdb"
   "gpu"
+  "gpu.pdb"
 )
 
 # Per-language clean rules from dependency scanning.

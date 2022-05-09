@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CUDA
-  "/jet/home/xuan1998/CS267-Project/solver.cu" "/jet/home/xuan1998/CS267-Project/build/CMakeFiles/gpu.dir/solver.cu.o"
+  "/home/laurencelu/CS267-Project/solver.cu" "/home/laurencelu/CS267-Project/build/CMakeFiles/gpu.dir/solver.cu.o"
   )
 set(CMAKE_CUDA_COMPILER_ID "NVIDIA")
 
