@@ -1,6 +1,7 @@
 #include <iostream>
 #include <algorithm>
 #include <functional>
+#include <vector>
 #include <mpi.h>
 
 #define IX(i, j) ((i) + (N + 2) * (j))
@@ -11,7 +12,7 @@
         x = tmp;         \
     }
 
-using float_t = float;
+using std::vector;
 
 const int N = 2;
 const int size = (N + 2) * (N + 2);
@@ -20,22 +21,30 @@ float static u_prev[size]{}; // = {[0 ... 15] = 1000.0};
 float static v_prev[size]{}; // = {[0 ... 15] = 1000.0};
 float static dens[size]{}, dens_prev[size]{};
 
-struct
-{
-};
-
 MPI_Comm cart;
 int rankN;
 int myRank;
-int i = 1; // the "width"? or the "length"
 int procDim;
 int numRows, numCols;
 int procCoords[2]{}, dims[2]{};
+int left, right, top, bot;
+MPI_Datatype col_t, row_t;
+enum
+{
+    LEFT,
+    RIGHT,
+    DOWN,
+    UP,
+    CENTER
+};
+int neighborProcs[4]{MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL, MPI_PROC_NULL};
 
+void communicateBorders(float *ptr);
+void project(int N, float *u, float *v, float *p, float *div);
 void foreach (int iterations, std::function<void(int, int)> subroutine)
 {
     int leftBound = left, rightBound = right, topBound = top, botBound = bot;
-    if (procCoords[0] == 0) // assuming this is left/ right
+    if (procCoords[0] == 0)
     {
         leftBound++;
     }
@@ -62,8 +71,6 @@ void foreach (int iterations, std::function<void(int, int)> subroutine)
         }
     }
 }
-
-void project(int N, float *u, float *v, float *p, float *div);
 
 void add_source(int N, float *x, float *s, float dt)
 {
@@ -260,55 +267,80 @@ void project(int N, float *u, float *v, float *p, float *div)
     set_bnd(N, 2, v);
 }
 
-void communicateBorders()
+void communicateBorders(float *ptr)
 {
-    // direct side then full top/bot
-
+    vector<MPI_Request> requests{};
+    if (neighborProcs[LEFT] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Isend(ptr, 1, col_t, neighborProcs[LEFT], 0, cart, &requests.back());
+    }
+    if (neighborProcs[RIGHT] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Isend(ptr + (numCols - 1), 1, col_t, neighborProcs[RIGHT], 1, cart, &requests.back());
+    }
+    if (neighborProcs[UP] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Isend(ptr, 1, col_t, neighborProcs[UP], 2, cart, &requests.back());
+    }
+    if (neighborProcs[DOWN] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Isend(ptr + (numCols - 1) * numRows, 1, col_t, neighborProcs[DOWN], 3, cart, &requests.back());
+    }
+    vector<MPI_Status> statuses{};
+    if (neighborProcs[LEFT] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Irecv(ptr, 1, col_t, neighborProcs[LEFT], 1, cart, &requests.back());
+    }
+    if (neighborProcs[RIGHT] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Irecv(ptr + (numCols - 1), 1, col_t, neighborProcs[RIGHT], 0, cart, &requests.back());
+    }
+    if (neighborProcs[UP] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Irecv(ptr, 1, col_t, neighborProcs[UP], 3, cart, &requests.back());
+    }
+    if (neighborProcs[DOWN] != MPI_PROC_NULL)
+    {
+        requests.emplace_back();
+        MPI_Irecv(ptr + (numCols - 1) * numRows, 1, col_t, neighborProcs[DOWN], 2, cart, &requests.back());
+    }
+    MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
 }
 
 void factorize(const int n)
 {
     // MPI cart
     MPI_Comm_size(MPI_COMM_WORLD, &rankN);
-    procDim = rankN;
-    const int n2 = n + 2;
-    while (rankN / i + 1 > i)
-    {
-        if (n2 % i == 0 && n2 % (rankN / i) == 0 && rankN % i == 0)
-        {
-            procDim = rankN / i;
-        }
-        i++;
-    }
-    dims[0] = procDim, dims[1] = rankN / procDim;
+    // assume perfect powers of 4 for both processors, powers of 2 for (n + 2)
+    procDim = sqrt(rankN);
+    dims[0] = procDim, dims[1] = procDim;
     const int periods[2]{false, false};
-    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, (int)true, &cart);
+    MPI_Cart_create(MPI_COMM_WORLD, 2, periods, true, &cart);
     MPI_Comm_rank(cart, &myRank);
-
-    MPI_Datatype col, row;
-    MPI_Type_vector(dims[0], 1, dims[1], MPI_FLOAT, &col);
-    MPI_Type_vector(dims[1], 1, dims[0], MPI_FLOAT, &row);
+    MPI_Cart_coords(cart, myRank, 2, procCoords);
+    numRows = numCols = (n + 2) / procDim;
 }
-int left, right, top, bot;
+
 void assignBlocks(const int n)
 {
-    if (i == 1)
-    {
-        int bar = (n + 2) % rankN;
-        numRows = (n + 2) / rankN;
-        if (myRank < bar)
-            numRows++;
-    }
-    else
-    {
-        // this is most likely borken
-        MPI_Cart_coords(cart, myRank, 2, procCoords);
-        // these might be transposed
-        left = procCoords[0] * numCols;
-        right = (procCoords[0] + 1) * numCols;
-        bot = procCoords[1] * Rows;
-        top = (procCoords[1] + 1) * numRows;
-    }
+    left = procCoords[0] * numRows;
+    right = (procCoords[0] + 1) * numRows;
+    bot = procCoords[1] * numRows;
+    top = (procCoords[1] + 1) * numRows;
+    // j = column, i = row
+    MPI_Type_contiguous(numCols, MPI_FLOAT, &row_t);
+    MPI_Type_vector(1, numRows, numCols /*stride */, MPI_FLOAT, &col_t);
+    MPI_Type_commit(row_t);
+    MPI_Type_commit(col_t);
+    MPI_Cart_shift(cart, 0, 1, &neighborProcs[LEFT], &neighborProcs[RIGHT]);
+    MPI_Cart_shift(cart, 1, 1, &neighborProcs[DOWN], &neighborProcs[UP]);
 }
 
 int main(int argc, char **argv)
