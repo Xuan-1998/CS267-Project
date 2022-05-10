@@ -1,7 +1,9 @@
-#include <iostream>
 #include <algorithm>
+#include <cmath>
 #include <functional>
+#include <iostream>
 #include <vector>
+
 #include <mpi.h>
 
 #define IX(i, j) ((i) + (N + 2) * (j))
@@ -14,7 +16,7 @@
 
 using std::vector;
 
-const int N = 2;
+const int N = 254;
 const int size = (N + 2) * (N + 2);
 float static u[size]{}, v[size]{};
 float static u_prev[size]{}; // = {[0 ... 15] = 1000.0};
@@ -48,7 +50,7 @@ void foreach (int iterations, std::function<void(int, int)> subroutine)
     {
         leftBound++;
     }
-    else if (procCoords[0] == procDim - 1)
+    else if (procCoords[0] == dims[0] - 1)
     {
         rightBound--;
     }
@@ -56,11 +58,11 @@ void foreach (int iterations, std::function<void(int, int)> subroutine)
     {
         botBound++;
     }
-    else if (procCoords[1] == i - 1)
+    else if (procCoords[1] == dims[1] - 1)
     {
         topBound--;
     }
-    for (int k = 0; k < iteratkons; k++)
+    for (int k = 0; k < iterations; k++)
     {
         for (int i = botBound; i < topBound; i++)
         {
@@ -86,6 +88,7 @@ void add_source(int N, float *x, float *s, float dt)
 void set_bnd(int N, int b, float *x)
 {
     // TODO: if not border, then return, i.e. parallelize
+    communicateBorders(x);
     int i;
     for (i = 1; i <= N; i++)
     {
@@ -98,11 +101,13 @@ void set_bnd(int N, int b, float *x)
     x[IX(0, N + 1)] = 0.5 * (x[IX(1, N + 1)] + x[IX(0, N)]);
     x[IX(N + 1, 0)] = 0.5 * (x[IX(N, 0)] + x[IX(N + 1, 1)]);
     x[IX(N + 1, N + 1)] = 0.5 * (x[IX(N, N + 1)] + x[IX(N + 1, N)]);
+    communicateBorders(x);
 }
 
 void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
 {
     // TODO: red-black re-ordering
+    communicateBorders(x);
     int i, j, k;
     float a = dt * diff * N * N;
     for (k = 0; k < 20; k++)
@@ -119,6 +124,7 @@ void diffuse(int N, int b, float *x, float *x0, float diff, float dt)
         }
         set_bnd(N, b, x);
     }
+    communicateBorders(x);
 }
 
 void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
@@ -155,6 +161,7 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
         }
     }
     */
+    communicateBorders(d);
     foreach (1, [=](int i, int j)
              {
                 int i0, j0, i1, j1;
@@ -183,6 +190,7 @@ void advect(int N, int b, float *d, float *d0, float *u, float *v, float dt)
                             s1 * (t0 * d0[IX(i1, j0)] + t1 * d0[IX(i1, j1)]); })
         ;
     set_bnd(N, b, d);
+    communicateBorders(d);
 }
 
 void dens_step(int N, float *x, float *x0, float *u, float *v, float diff,
@@ -227,6 +235,10 @@ void project(int N, float *u, float *v, float *p, float *div)
         }
     }
     */
+    communicateBorders(div);
+    communicateBorders(p);
+    communicateBorders(u);
+    communicateBorders(v);
     foreach (1, [=](int i, int j)
              {
                 div[IX(i, j)] = -0.5 * h * (u[IX(i + 1, j)] - u[IX(i - 1, j)] + v[IX(i, j + 1)] - v[IX(i, j - 1)]);
@@ -265,6 +277,11 @@ void project(int N, float *u, float *v, float *p, float *div)
         ;
     set_bnd(N, 1, u);
     set_bnd(N, 2, v);
+
+    communicateBorders(div);
+    communicateBorders(p);
+    communicateBorders(u);
+    communicateBorders(v);
 }
 
 void communicateBorders(float *ptr)
@@ -322,7 +339,7 @@ void factorize(const int n)
     procDim = sqrt(rankN);
     dims[0] = procDim, dims[1] = procDim;
     const int periods[2]{false, false};
-    MPI_Cart_create(MPI_COMM_WORLD, 2, periods, true, &cart);
+    MPI_Cart_create(MPI_COMM_WORLD, 2, dims, periods, true, &cart);
     MPI_Comm_rank(cart, &myRank);
     MPI_Cart_coords(cart, myRank, 2, procCoords);
     numRows = numCols = (n + 2) / procDim;
@@ -337,8 +354,8 @@ void assignBlocks(const int n)
     // j = column, i = row
     MPI_Type_contiguous(numCols, MPI_FLOAT, &row_t);
     MPI_Type_vector(1, numRows, numCols /*stride */, MPI_FLOAT, &col_t);
-    MPI_Type_commit(row_t);
-    MPI_Type_commit(col_t);
+    MPI_Type_commit(&row_t);
+    MPI_Type_commit(&col_t);
     MPI_Cart_shift(cart, 0, 1, &neighborProcs[LEFT], &neighborProcs[RIGHT]);
     MPI_Cart_shift(cart, 1, 1, &neighborProcs[DOWN], &neighborProcs[UP]);
 }
@@ -362,7 +379,7 @@ int main(int argc, char **argv)
         vel_step(N, u, v, u_prev, v_prev, visc, dt);
         dens_step(N, dens, dens_prev, u, v, diff, dt);
         using namespace std;
-        cout << u[5] << endl;
+        // cout << u[5] << endl;
         // draw_dens(N, dens);
     }
     MPI_Finalize();
