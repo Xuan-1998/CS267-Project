@@ -1,0 +1,7 @@
+==55598== NVPROF is profiling process 55598, command: ./gpu
+==55598== Profiling application: ./gpu
+==55598== Profiling result:
+No kernels were profiled.
+No API activities were profiled.
+==55598== Warning: Some profiling data are not recorded.
+======== Error: Application received signal 139
